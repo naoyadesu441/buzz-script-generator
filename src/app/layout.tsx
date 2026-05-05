@@ -2,8 +2,8 @@ import type { Metadata, Viewport } from 'next'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'バズスクリプトジェネレーター',
-  description: 'ペルソナ深掘りと50本のバズ投稿テーマを一括生成。ターゲットの心に刺さる発信戦略を構築。',
+  title: 'バズネタ100本ジェネレーター',
+  description: 'テーマと媒体を選ぶだけで、AIがSNS投稿アイデアを100本一括生成',
 }
 
 export const viewport: Viewport = {
