@@ -2,8 +2,11 @@
 
 import { useState, useEffect } from 'react'
 
-type Platform = 'YouTube' | 'Threads' | 'TikTok' | 'X'
+type Provider = 'gemini' | 'claude'
+type OutputPlatform = 'Threads' | 'Instagram'
+type ReferencePlatform = 'YouTube' | 'Threads' | 'TikTok' | 'X' | 'Instagram'
 type Tab = 'generate' | 'history' | 'guide'
+type ThemeMode = 'manual' | 'suggest'
 
 interface PostIdea {
   id: number
@@ -15,62 +18,192 @@ interface PostIdea {
 interface Generation {
   id: string
   theme: string
-  platform: Platform
+  outputPlatform: OutputPlatform
+  referencePlatforms: string[]
+  provider: Provider
   count: number
   ideas: PostIdea[]
   createdAt: string
 }
 
-const PLATFORMS: Platform[] = ['YouTube', 'Threads', 'TikTok', 'X']
+const OUTPUT_PLATFORMS: OutputPlatform[] = ['Threads', 'Instagram']
+const REFERENCE_PLATFORMS: ReferencePlatform[] = ['YouTube', 'Threads', 'TikTok', 'X', 'Instagram']
 
-const PLATFORM_DESC: Record<Platform, string> = {
-  YouTube: 'YouTubeの動画タイトル・サムネコピー',
-  Threads: 'Threadsのテキスト投稿',
-  TikTok: 'TikTokの動画キャプション',
-  X: 'X(Twitter)の投稿文',
+const OUTPUT_PLATFORM_DESC: Record<OutputPlatform, string> = {
+  Threads: '短文・会話風・改行多め・絵文字控えめ',
+  Instagram: 'キャプション形式・ハッシュタグ多用・絵文字活用',
 }
+
+const REFERENCE_PLATFORM_STYLE: Record<ReferencePlatform, string> = {
+  YouTube: '強いサムネ的フック・数字や驚きで掴む',
+  Threads: '共感・日常会話風・問いかけ・短め',
+  TikTok: '2秒で掴む・流行語・テンポ感',
+  X: '短文・逆説・問いかけ・引用RT想定',
+  Instagram: '保存したくなる・ビジュアル想起・ハッシュタグ',
+}
+
+const GENRE_OPTIONS = [
+  '美容・スキンケア', 'ファッション', 'ダイエット・健康', '筋トレ・フィットネス',
+  '料理・レシピ', '副業・稼ぎ方', 'ビジネス・仕事術', '転職・キャリア',
+  '節約・お金', '投資・資産形成', '子育て・育児', 'メンタル・ライフスタイル',
+  '勉強・学習', 'エンタメ・趣味', 'テクノロジー・AI',
+]
 
 export default function Home() {
   const [tab, setTab] = useState<Tab>('generate')
-  const [apiKey, setApiKey] = useState('')
+
+  // API Provider
+  const [provider, setProvider] = useState<Provider>('gemini')
+  const [geminiKey, setGeminiKey] = useState('')
+  const [claudeKey, setClaudeKey] = useState('')
   const [showApiModal, setShowApiModal] = useState(false)
   const [apiKeyInput, setApiKeyInput] = useState('')
-  const [theme, setTheme] = useState('')
-  const [platform, setPlatform] = useState<Platform>('X')
+  const [providerInput, setProviderInput] = useState<Provider>('gemini')
+
+  // Generation settings
+  const [outputPlatform, setOutputPlatform] = useState<OutputPlatform>('Threads')
+  const [referencePlatforms, setReferencePlatforms] = useState<Set<ReferencePlatform>>(
+    new Set(REFERENCE_PLATFORMS)
+  )
   const [count, setCount] = useState(100)
+
+  // Theme
+  const [themeMode, setThemeMode] = useState<ThemeMode>('manual')
+  const [manualTheme, setManualTheme] = useState('')
+  const [genre, setGenre] = useState('')
+  const [suggestedThemes, setSuggestedThemes] = useState<string[]>([])
+  const [selectedSuggestion, setSelectedSuggestion] = useState('')
+  const [isSuggesting, setIsSuggesting] = useState(false)
+  const [suggestionError, setSuggestionError] = useState('')
+
+  // Generation
   const [isGenerating, setIsGenerating] = useState(false)
   const [progress, setProgress] = useState(0)
   const [progressMsg, setProgressMsg] = useState('')
   const [ideas, setIdeas] = useState<PostIdea[]>([])
-  const [currentGen, setCurrentGen] = useState<{ theme: string; platform: Platform } | null>(null)
-  const [history, setHistory] = useState<Generation[]>([])
-  const [copiedId, setCopiedId] = useState<number | null>(null)
+  const [currentGen, setCurrentGen] = useState<{ theme: string; outputPlatform: OutputPlatform } | null>(null)
   const [error, setError] = useState('')
+  const [copiedId, setCopiedId] = useState<number | null>(null)
+
+  // History
+  const [history, setHistory] = useState<Generation[]>([])
 
   useEffect(() => {
-    const key = localStorage.getItem('buzz_api_key') || ''
+    const prov = (localStorage.getItem('buzz_provider') as Provider) || 'gemini'
+    const gKey = localStorage.getItem('buzz_key_gemini') || ''
+    const cKey = localStorage.getItem('buzz_key_claude') || ''
     const hist = localStorage.getItem('buzz_history')
-    if (key) setApiKey(key)
-    if (hist) {
-      try { setHistory(JSON.parse(hist)) } catch {}
-    }
+    setProvider(prov)
+    setGeminiKey(gKey)
+    setClaudeKey(cKey)
+    if (hist) { try { setHistory(JSON.parse(hist)) } catch {} }
   }, [])
 
-  const saveApiKey = () => {
-    const trimmed = apiKeyInput.trim()
-    setApiKey(trimmed)
-    localStorage.setItem('buzz_api_key', trimmed)
-    setShowApiModal(false)
-    setApiKeyInput('')
-  }
+  const currentKey = provider === 'gemini' ? geminiKey : claudeKey
 
   const openApiModal = () => {
-    setApiKeyInput(apiKey)
+    setProviderInput(provider)
+    setApiKeyInput(provider === 'gemini' ? geminiKey : claudeKey)
     setShowApiModal(true)
   }
 
+  const saveApiKey = () => {
+    const trimmed = apiKeyInput.trim()
+    setProvider(providerInput)
+    localStorage.setItem('buzz_provider', providerInput)
+    if (providerInput === 'gemini') {
+      setGeminiKey(trimmed)
+      localStorage.setItem('buzz_key_gemini', trimmed)
+    } else {
+      setClaudeKey(trimmed)
+      localStorage.setItem('buzz_key_claude', trimmed)
+    }
+    setShowApiModal(false)
+  }
+
+  const toggleReferencePlatform = (p: ReferencePlatform) => {
+    const next = new Set(referencePlatforms)
+    if (next.has(p)) {
+      if (next.size > 1) next.delete(p)
+    } else {
+      next.add(p)
+    }
+    setReferencePlatforms(next)
+  }
+
+  const callLLM = async (prompt: string, maxTokens: number): Promise<string> => {
+    if (provider === 'gemini') {
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${currentKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: { responseMimeType: 'application/json', maxOutputTokens: maxTokens },
+          }),
+        }
+      )
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}))
+        throw new Error((d as { error?: { message?: string } }).error?.message || `Gemini APIエラー: ${res.status}`)
+      }
+      const d = await res.json()
+      return d.candidates?.[0]?.content?.parts?.[0]?.text || ''
+    } else {
+      const res = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': currentKey,
+          'anthropic-version': '2023-06-01',
+          'anthropic-dangerous-direct-browser-access': 'true',
+        },
+        body: JSON.stringify({
+          model: 'claude-haiku-4-5-20251001',
+          max_tokens: maxTokens,
+          messages: [{ role: 'user', content: prompt }],
+        }),
+      })
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}))
+        throw new Error((d as { error?: { message?: string } }).error?.message || `Claude APIエラー: ${res.status}`)
+      }
+      const d = await res.json()
+      return d.content?.[0]?.text || ''
+    }
+  }
+
+  const suggestThemes = async () => {
+    if (!genre || !currentKey || isSuggesting) return
+    setIsSuggesting(true)
+    setSuggestedThemes([])
+    setSelectedSuggestion('')
+    setSuggestionError('')
+
+    const refList = Array.from(referencePlatforms).join('、')
+    const prompt = `大ジャンル「${genre}」について、${refList} でよく伸びる投稿の具体的なサブテーマを5つ提案してください。キャッチーで具体的なものを選んでください。
+
+JSON形式のみで返答（説明文不要）:
+{"themes":["テーマ1","テーマ2","テーマ3","テーマ4","テーマ5"]}`
+
+    try {
+      const text = await callLLM(prompt, 512)
+      const jsonMatch = text.match(/\{[\s\S]*\}/)
+      if (!jsonMatch) throw new Error('解析失敗。再度お試しください。')
+      const data = JSON.parse(jsonMatch[0])
+      setSuggestedThemes(data.themes || [])
+    } catch (err: unknown) {
+      setSuggestionError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setIsSuggesting(false)
+    }
+  }
+
+  const activeTheme = themeMode === 'manual' ? manualTheme : selectedSuggestion
+
   const generate = async () => {
-    if (!apiKey || !theme.trim() || isGenerating) return
+    if (!currentKey || !activeTheme.trim() || isGenerating) return
     setIsGenerating(true)
     setProgress(5)
     setProgressMsg('APIに接続中...')
@@ -82,42 +215,33 @@ export default function Home() {
       setProgress(20)
       setProgressMsg(`${count}本のアイデアを生成中...（30〜60秒かかります）`)
 
-      const prompt = `テーマ「${theme}」について${PLATFORM_DESC[platform]}を${count}本生成してください。
+      const refList = Array.from(referencePlatforms)
+      const refStyles = refList
+        .map(p => `・${p}: ${REFERENCE_PLATFORM_STYLE[p as ReferencePlatform]}`)
+        .join('\n')
 
-必ず以下のJSON形式のみで返答してください（前後に説明文・コードブロック不要）:
-{"ideas":[{"id":1,"hook":"フック（最初の一行。読者が止まる強い言葉）","body":"本文（2〜3行。hookの続き）","hashtags":"#タグ1 #タグ2"},{"id":2,"hook":"...","body":"...","hashtags":"..."}]}
+      const prompt = `あなたはSNS投稿のバズプロデューサーです。
 
-条件：
-- hookは数字・問いかけ・共感・驚き・逆説・リスト型など多様なパターンを使い分ける
-- ${platform}の文化・文体・長さに最適化する
-- 全${count}件、内容の重複なし
+【出力先】${outputPlatform}（${OUTPUT_PLATFORM_DESC[outputPlatform]}）
+【参考にするバズパターン（ミックスして活用）】
+${refStyles}
+【テーマ】${activeTheme.trim()}
+
+上記を踏まえ、${count}本のバズる投稿アイデアをJSON形式のみで返してください（前後の説明文不要）:
+{"ideas":[{"id":1,"hook":"読者が止まる強い一行","body":"本文（${outputPlatform}の最適な長さ・文体）","hashtags":"#タグ1 #タグ2"},{"id":2,"hook":"...","body":"...","hashtags":"..."},...]}
+
+ルール:
+- hookは数字・問いかけ・共感・驚き・逆説など多様なパターンで
+- bodyは${outputPlatform}に最適な長さ・文体・改行
+- 全${count}件、内容重複なし
 - 日本語で出力`
 
-      const res = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': apiKey,
-          'anthropic-version': '2023-06-01',
-          'anthropic-dangerous-direct-browser-access': 'true',
-        },
-        body: JSON.stringify({
-          model: 'claude-haiku-4-5-20251001',
-          max_tokens: count <= 25 ? 4000 : count <= 50 ? 6000 : 10000,
-          messages: [{ role: 'user', content: prompt }],
-        }),
-      })
-
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({}))
-        throw new Error((errData as { error?: { message?: string } }).error?.message || `APIエラー: ${res.status}`)
-      }
+      const maxTok = count <= 25 ? 4000 : count <= 50 ? 6000 : 10000
+      const text = await callLLM(prompt, maxTok)
 
       setProgress(85)
       setProgressMsg('データを解析中...')
 
-      const apiData = await res.json()
-      const text: string = apiData.content?.[0]?.text || ''
       const jsonMatch = text.match(/\{[\s\S]*\}/)
       if (!jsonMatch) throw new Error('レスポンスの解析に失敗しました。再度お試しください。')
 
@@ -130,14 +254,16 @@ export default function Home() {
       }))
 
       setIdeas(newIdeas)
-      setCurrentGen({ theme: theme.trim(), platform })
+      setCurrentGen({ theme: activeTheme.trim(), outputPlatform })
       setProgress(100)
       setProgressMsg(`${newIdeas.length}本の生成が完了しました！`)
 
       const gen: Generation = {
         id: Date.now().toString(),
-        theme: theme.trim(),
-        platform,
+        theme: activeTheme.trim(),
+        outputPlatform,
+        referencePlatforms: refList,
+        provider,
         count: newIdeas.length,
         ideas: newIdeas,
         createdAt: new Date().toISOString(),
@@ -146,8 +272,7 @@ export default function Home() {
       setHistory(newHistory)
       localStorage.setItem('buzz_history', JSON.stringify(newHistory))
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err)
-      setError(msg)
+      setError(err instanceof Error ? err.message : String(err))
       setProgress(0)
       setProgressMsg('')
     } finally {
@@ -179,9 +304,9 @@ export default function Home() {
 
   const loadFromHistory = (gen: Generation) => {
     setIdeas(gen.ideas)
-    setCurrentGen({ theme: gen.theme, platform: gen.platform })
-    setTheme(gen.theme)
-    setPlatform(gen.platform)
+    setCurrentGen({ theme: gen.theme, outputPlatform: gen.outputPlatform })
+    setManualTheme(gen.theme)
+    setOutputPlatform(gen.outputPlatform)
     setTab('generate')
   }
 
@@ -191,6 +316,8 @@ export default function Home() {
     localStorage.setItem('buzz_history', JSON.stringify(updated))
   }
 
+  const canGenerate = !!currentKey && !!activeTheme.trim() && !isGenerating
+
   return (
     <div className="min-h-screen bg-[#0a0a0a] text-white font-sans">
       {/* Header */}
@@ -199,17 +326,19 @@ export default function Home() {
           <div className="flex items-center justify-between mb-4">
             <div>
               <h1 className="text-base font-bold tracking-tight">バズネタ100本ジェネレーター</h1>
-              <p className="text-[11px] text-gray-500 mt-0.5">SNS投稿アイデアをAIが一括生成</p>
+              <p className="text-[11px] text-gray-500 mt-0.5">Threads / Instagram 投稿アイデアを一括生成</p>
             </div>
             <button
               onClick={openApiModal}
               className={`text-[11px] px-3 py-1.5 rounded-full border font-medium transition-all ${
-                apiKey
+                currentKey
                   ? 'border-emerald-500/50 text-emerald-400 bg-emerald-500/10'
                   : 'border-amber-500/50 text-amber-400 bg-amber-500/10'
               }`}
             >
-              {apiKey ? '✓ API設定済' : '⚠ API未設定'}
+              {currentKey
+                ? `✓ ${provider === 'gemini' ? 'Gemini' : 'Claude'} 設定済`
+                : '⚠ API未設定'}
             </button>
           </div>
 
@@ -223,52 +352,62 @@ export default function Home() {
                 }`}
               >
                 {t === 'generate' ? '生成' : t === 'history' ? `履歴${history.length > 0 ? ` (${history.length})` : ''}` : '使い方'}
-                {tab === t && (
-                  <span className="absolute bottom-0 left-4 right-4 h-[2px] bg-white rounded-full" />
-                )}
+                {tab === t && <span className="absolute bottom-0 left-4 right-4 h-[2px] bg-white rounded-full" />}
               </button>
             ))}
           </div>
         </div>
       </header>
 
-      {/* API Key Modal */}
+      {/* API Modal */}
       {showApiModal && (
         <div
           className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/80 p-4"
           onClick={e => { if (e.target === e.currentTarget) setShowApiModal(false) }}
         >
           <div className="w-full max-w-sm bg-[#1c1c1c] rounded-2xl p-6 border border-white/10">
-            <h2 className="font-bold text-base mb-1">Anthropic APIキー</h2>
-            <p className="text-[12px] text-gray-400 mb-4">
-              キーはブラウザのLocalStorageにのみ保存されます。サーバーには送信されません。
+            <h2 className="font-bold text-base mb-4">API設定</h2>
+
+            <p className="text-[11px] text-gray-500 mb-2">使用するAPI</p>
+            <div className="flex gap-2 mb-4">
+              {(['gemini', 'claude'] as Provider[]).map(p => (
+                <button
+                  key={p}
+                  onClick={() => { setProviderInput(p); setApiKeyInput(p === 'gemini' ? geminiKey : claudeKey) }}
+                  className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition-all ${
+                    providerInput === p ? 'bg-white text-black' : 'bg-[#2a2a2a] text-gray-400'
+                  }`}
+                >
+                  {p === 'gemini' ? 'Gemini（無料枠）' : 'Claude（有料）'}
+                </button>
+              ))}
+            </div>
+
+            <p className="text-[11px] text-gray-500 mb-2">
+              {providerInput === 'gemini'
+                ? 'Gemini APIキー（aistudio.google.com → API keys）'
+                : 'Anthropic APIキー（console.anthropic.com）'}
             </p>
             <input
               type="password"
               value={apiKeyInput}
               onChange={e => setApiKeyInput(e.target.value)}
-              placeholder="sk-ant-..."
-              className="w-full bg-[#0a0a0a] border border-white/15 rounded-xl px-4 py-3 text-sm font-mono mb-4 focus:outline-none focus:border-white/30 placeholder-gray-700"
+              placeholder={providerInput === 'gemini' ? 'AIza...' : 'sk-ant-...'}
+              className="w-full bg-[#0a0a0a] border border-white/15 rounded-xl px-4 py-3 text-sm font-mono mb-3 focus:outline-none focus:border-white/30 placeholder-gray-700"
               autoFocus
               onKeyDown={e => e.key === 'Enter' && saveApiKey()}
             />
+            {providerInput === 'gemini' && (
+              <p className="text-[11px] text-blue-400 mb-4">無料枠: 15リクエスト/分・100万トークン/日</p>
+            )}
             <div className="flex gap-2">
-              <button
-                onClick={() => setShowApiModal(false)}
-                className="flex-1 py-2.5 border border-white/15 rounded-xl text-sm text-gray-400"
-              >
+              <button onClick={() => setShowApiModal(false)} className="flex-1 py-2.5 border border-white/15 rounded-xl text-sm text-gray-400">
                 キャンセル
               </button>
-              <button
-                onClick={saveApiKey}
-                className="flex-1 py-2.5 bg-white text-black rounded-xl text-sm font-bold"
-              >
+              <button onClick={saveApiKey} className="flex-1 py-2.5 bg-white text-black rounded-xl text-sm font-bold">
                 保存
               </button>
             </div>
-            <p className="text-[11px] text-gray-600 mt-3 text-center">
-              APIキーは console.anthropic.com で取得できます
-            </p>
           </div>
         </div>
       )}
@@ -277,55 +416,142 @@ export default function Home() {
         {/* ── 生成タブ ── */}
         {tab === 'generate' && (
           <div className="space-y-5 pt-5">
-            {/* Hero (no results yet) */}
             {ideas.length === 0 && !isGenerating && (
               <div className="py-2 pb-4">
                 <h2 className="text-3xl font-black leading-tight tracking-tight mb-2">
                   フックの強さが、<br />投稿の刺さりを決める。
                 </h2>
-                <p className="text-gray-500 text-sm">
-                  テーマと媒体を選んで、AIがバズネタを一括生成します
-                </p>
+                <p className="text-gray-500 text-sm">テーマと媒体を選んで、AIがバズネタを一括生成</p>
               </div>
             )}
 
-            {/* Form card */}
             <div className="bg-[#161616] rounded-2xl p-5 space-y-5 border border-white/[0.06]">
-              {/* Platform selector */}
+              {/* Output platform */}
               <div>
-                <p className="text-[11px] text-gray-500 mb-2 font-medium uppercase tracking-wider">媒体</p>
-                <div className="grid grid-cols-4 gap-2">
-                  {PLATFORMS.map(p => (
+                <p className="text-[11px] text-gray-500 mb-2 font-medium uppercase tracking-wider">出力先</p>
+                <div className="grid grid-cols-2 gap-2">
+                  {OUTPUT_PLATFORMS.map(p => (
                     <button
                       key={p}
-                      onClick={() => setPlatform(p)}
+                      onClick={() => setOutputPlatform(p)}
                       className={`py-2.5 rounded-xl text-sm font-bold transition-all ${
-                        platform === p
+                        outputPlatform === p
                           ? 'bg-white text-black'
-                          : 'bg-[#222] text-gray-400 hover:bg-[#2a2a2a] hover:text-gray-200'
+                          : 'bg-[#222] text-gray-400 hover:bg-[#2a2a2a]'
                       }`}
                     >
                       {p}
                     </button>
                   ))}
                 </div>
-                <p className="text-[11px] text-gray-600 mt-1.5">{PLATFORM_DESC[platform]}</p>
+                <p className="text-[11px] text-gray-600 mt-1.5">{OUTPUT_PLATFORM_DESC[outputPlatform]}</p>
               </div>
 
-              {/* Theme input */}
+              {/* Reference platforms */}
+              <div>
+                <p className="text-[11px] text-gray-500 mb-2 font-medium uppercase tracking-wider">参考にする媒体（複数選択可）</p>
+                <div className="flex flex-wrap gap-2">
+                  {REFERENCE_PLATFORMS.map(p => (
+                    <button
+                      key={p}
+                      onClick={() => toggleReferencePlatform(p)}
+                      className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all border ${
+                        referencePlatforms.has(p)
+                          ? 'bg-white text-black border-white'
+                          : 'bg-transparent text-gray-500 border-gray-700 hover:border-gray-500'
+                      }`}
+                    >
+                      {p}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-[11px] text-gray-600 mt-1.5">選んだ媒体のバズパターンをミックスして生成します</p>
+              </div>
+
+              {/* Theme */}
               <div>
                 <p className="text-[11px] text-gray-500 mb-2 font-medium uppercase tracking-wider">テーマ・ジャンル</p>
-                <input
-                  type="text"
-                  value={theme}
-                  onChange={e => setTheme(e.target.value)}
-                  placeholder="例: ダイエット、副業、筋トレ、子育て..."
-                  className="w-full bg-[#0a0a0a] border border-white/[0.12] rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-white/25 placeholder-gray-700 transition-colors"
-                  onKeyDown={e => e.key === 'Enter' && generate()}
-                />
+                <div className="flex gap-2 mb-3">
+                  {(['manual', 'suggest'] as ThemeMode[]).map(m => (
+                    <button
+                      key={m}
+                      onClick={() => setThemeMode(m)}
+                      className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-all ${
+                        themeMode === m
+                          ? 'bg-white text-black border-white'
+                          : 'text-gray-500 border-gray-700 hover:border-gray-500'
+                      }`}
+                    >
+                      {m === 'manual' ? '直接入力' : 'AIに提案させる'}
+                    </button>
+                  ))}
+                </div>
+
+                {themeMode === 'manual' ? (
+                  <input
+                    type="text"
+                    value={manualTheme}
+                    onChange={e => setManualTheme(e.target.value)}
+                    placeholder="例: ダイエット、副業、筋トレ、子育て..."
+                    className="w-full bg-[#0a0a0a] border border-white/[0.12] rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-white/25 placeholder-gray-700 transition-colors"
+                    onKeyDown={e => e.key === 'Enter' && generate()}
+                  />
+                ) : (
+                  <div className="space-y-3">
+                    <div className="flex gap-2">
+                      <select
+                        value={genre}
+                        onChange={e => setGenre(e.target.value)}
+                        className="flex-1 bg-[#0a0a0a] border border-white/[0.12] rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-white/25 text-white appearance-none"
+                      >
+                        <option value="">大ジャンルを選ぶ...</option>
+                        {GENRE_OPTIONS.map(g => <option key={g} value={g}>{g}</option>)}
+                      </select>
+                      <button
+                        onClick={suggestThemes}
+                        disabled={!genre || !currentKey || isSuggesting}
+                        className={`px-4 py-3 rounded-xl text-sm font-bold transition-all whitespace-nowrap ${
+                          !genre || !currentKey || isSuggesting
+                            ? 'bg-[#222] text-gray-600 cursor-not-allowed'
+                            : 'bg-[#333] text-white hover:bg-[#3a3a3a]'
+                        }`}
+                      >
+                        {isSuggesting ? '生成中...' : 'テーマ提案'}
+                      </button>
+                    </div>
+
+                    {suggestionError && (
+                      <p className="text-[12px] text-red-400">{suggestionError}</p>
+                    )}
+
+                    {suggestedThemes.length > 0 && (
+                      <div className="space-y-2">
+                        <p className="text-[11px] text-gray-500">テーマを1つ選んでください</p>
+                        {suggestedThemes.map((t, i) => (
+                          <button
+                            key={i}
+                            onClick={() => setSelectedSuggestion(t)}
+                            className={`w-full text-left px-4 py-3 rounded-xl text-sm transition-all border ${
+                              selectedSuggestion === t
+                                ? 'bg-white text-black border-white font-semibold'
+                                : 'bg-[#0a0a0a] text-gray-300 border-white/10 hover:border-white/25'
+                            }`}
+                          >
+                            {t}
+                          </button>
+                        ))}
+                        <p className="text-[11px] text-gray-600">※ AIの学習データに基づく提案です（リアルタイムトレンドではありません）</p>
+                      </div>
+                    )}
+
+                    {!currentKey && (
+                      <p className="text-[12px] text-amber-400">右上でAPIキーを設定すると提案が使えます</p>
+                    )}
+                  </div>
+                )}
               </div>
 
-              {/* Count selector */}
+              {/* Count */}
               <div>
                 <p className="text-[11px] text-gray-500 mb-2 font-medium uppercase tracking-wider">生成本数</p>
                 <div className="flex gap-2">
@@ -334,9 +560,7 @@ export default function Home() {
                       key={n}
                       onClick={() => setCount(n)}
                       className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition-all ${
-                        count === n
-                          ? 'bg-white text-black'
-                          : 'bg-[#222] text-gray-400 hover:bg-[#2a2a2a] hover:text-gray-200'
+                        count === n ? 'bg-white text-black' : 'bg-[#222] text-gray-400 hover:bg-[#2a2a2a]'
                       }`}
                     >
                       {n}本
@@ -348,11 +572,11 @@ export default function Home() {
               {/* Generate button */}
               <button
                 onClick={generate}
-                disabled={isGenerating || !apiKey || !theme.trim()}
+                disabled={!canGenerate}
                 className={`w-full py-4 rounded-xl font-bold text-[15px] transition-all ${
-                  isGenerating || !apiKey || !theme.trim()
-                    ? 'bg-[#222] text-gray-600 cursor-not-allowed'
-                    : 'bg-white text-black hover:bg-gray-100 active:scale-[0.98]'
+                  canGenerate
+                    ? 'bg-white text-black hover:bg-gray-100 active:scale-[0.98]'
+                    : 'bg-[#222] text-gray-600 cursor-not-allowed'
                 }`}
               >
                 {isGenerating ? '生成中...' : `${count}本まとめて生成する`}
@@ -374,20 +598,17 @@ export default function Home() {
                 </div>
               )}
 
-              {/* Success message */}
               {!isGenerating && progress === 100 && progressMsg && (
                 <p className="text-[12px] text-emerald-400 text-center">{progressMsg}</p>
               )}
 
-              {/* Error */}
               {error && (
                 <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3">
                   <p className="text-[12px] text-red-400">{error}</p>
                 </div>
               )}
 
-              {/* No API key warning */}
-              {!apiKey && !isGenerating && (
+              {!currentKey && !isGenerating && (
                 <p className="text-[12px] text-amber-400 text-center">
                   右上の「API未設定」をタップしてAPIキーを設定してください
                 </p>
@@ -400,13 +621,13 @@ export default function Home() {
                 <div className="flex items-center justify-between mb-4">
                   <div>
                     <p className="font-bold text-base">{currentGen.theme}</p>
-                    <p className="text-[12px] text-gray-500">{currentGen.platform} · {ideas.length}本</p>
+                    <p className="text-[12px] text-gray-500">{currentGen.outputPlatform} · {ideas.length}本</p>
                   </div>
                   <button
-                    onClick={() => exportCSV(ideas, currentGen.theme, currentGen.platform)}
+                    onClick={() => exportCSV(ideas, currentGen.theme, currentGen.outputPlatform)}
                     className="flex items-center gap-1.5 px-4 py-2 bg-[#1c1c1c] border border-white/15 rounded-xl text-[13px] font-semibold hover:bg-[#252525] transition-all"
                   >
-                    <span>↓</span> CSV保存
+                    ↓ CSV保存
                   </button>
                 </div>
 
@@ -421,7 +642,7 @@ export default function Home() {
                           #{String(idea.id).padStart(2, '0')}
                         </span>
                         <div className="flex-1 min-w-0">
-                          <p className="font-semibold text-[14px] leading-snug mb-1.5 text-white">{idea.hook}</p>
+                          <p className="font-semibold text-[14px] leading-snug mb-1.5">{idea.hook}</p>
                           <p className="text-gray-400 text-[12px] leading-relaxed">{idea.body}</p>
                           {idea.hashtags && (
                             <p className="text-[#4da6ff] text-[11px] mt-2">{idea.hashtags}</p>
@@ -439,7 +660,7 @@ export default function Home() {
                 </div>
 
                 <button
-                  onClick={() => exportCSV(ideas, currentGen.theme, currentGen.platform)}
+                  onClick={() => exportCSV(ideas, currentGen.theme, currentGen.outputPlatform)}
                   className="w-full mt-4 py-3.5 bg-[#161616] border border-white/15 rounded-xl text-sm font-semibold hover:bg-[#1c1c1c] transition-all"
                 >
                   全{ideas.length}本をCSVエクスポート
@@ -462,17 +683,14 @@ export default function Home() {
             ) : (
               <div className="space-y-2.5">
                 {history.map(gen => (
-                  <div
-                    key={gen.id}
-                    className="bg-[#161616] rounded-xl p-4 border border-white/[0.06]"
-                  >
+                  <div key={gen.id} className="bg-[#161616] rounded-xl p-4 border border-white/[0.06]">
                     <div className="flex items-start justify-between mb-3">
                       <div>
                         <p className="font-semibold text-sm">{gen.theme}</p>
                         <p className="text-[11px] text-gray-500 mt-0.5">
-                          {gen.platform} · {gen.count}本 ·{' '}
+                          {gen.outputPlatform} · {gen.count}本 · {(gen.provider || 'gemini').toUpperCase()} ·{' '}
                           {new Date(gen.createdAt).toLocaleDateString('ja-JP', {
-                            month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+                            month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
                           })}
                         </p>
                       </div>
@@ -491,7 +709,7 @@ export default function Home() {
                         読み込む
                       </button>
                       <button
-                        onClick={() => exportCSV(gen.ideas, gen.theme, gen.platform)}
+                        onClick={() => exportCSV(gen.ideas, gen.theme, gen.outputPlatform)}
                         className="flex-1 py-2 bg-[#222] rounded-lg text-[13px] font-medium hover:bg-[#2a2a2a] transition-all"
                       >
                         CSV保存
@@ -508,33 +726,27 @@ export default function Home() {
         {tab === 'guide' && (
           <div className="pt-5 space-y-5">
             <h2 className="font-bold text-base">使い方</h2>
-
             <div className="space-y-3">
               {[
                 {
-                  step: '1',
-                  title: 'APIキーを設定する',
-                  body: '右上の「API未設定」をタップ。Anthropic APIキー（sk-ant-...）を入力して保存。キーはブラウザのLocalStorageにのみ保存され、サーバーには送信されません。',
+                  step: '1', title: 'APIキーを設定する',
+                  body: '右上のボタンをタップ。Gemini（無料枠）またはClaude（有料）を選択してAPIキーを入力して保存。キーはブラウザのLocalStorageにのみ保存されます。',
                 },
                 {
-                  step: '2',
-                  title: '媒体とテーマを入力',
-                  body: 'YouTube / Threads / TikTok / X から投稿先を選択。テーマ欄に「ダイエット」「副業」「筋トレ」など投稿ジャンルを入力。',
+                  step: '2', title: '出力先を選ぶ',
+                  body: 'Threads または Instagram を選択。それぞれの文体・長さ・ハッシュタグ使用量に最適化されたアイデアが生成されます。',
                 },
                 {
-                  step: '3',
-                  title: '生成本数を選んで実行',
-                  body: '25 / 50 / 100本から選択。「生成する」ボタンをタップすると、AIが30〜60秒でアイデアを一括生成します。',
+                  step: '3', title: '参考にする媒体を選ぶ',
+                  body: 'YouTube・Threads・TikTok・X・Instagramから複数選択可。選んだ媒体のバズパターンをミックスして生成します。',
                 },
                 {
-                  step: '4',
-                  title: '使いたいネタをコピー',
-                  body: '各カードにマウスを当てると「コピー」ボタンが表示されます。フック・本文・ハッシュタグが一括コピーされます。',
+                  step: '4', title: 'テーマを決める',
+                  body: '「直接入力」でテーマを自由記述、または「AIに提案させる」で大ジャンルを選んで具体テーマを5案自動生成。',
                 },
                 {
-                  step: '5',
-                  title: 'CSVでエクスポート',
-                  body: '結果画面の「CSVエクスポート」ボタンから全件ダウンロード。スプレッドシートで管理・編集できます。履歴からも再エクスポート可能。',
+                  step: '5', title: '生成してCSVエクスポート',
+                  body: '25/50/100本を選んで「生成する」。完了後にCSVエクスポートでスプレッドシートに保存できます。履歴からも再エクスポート可能。',
                 },
               ].map(({ step, title, body }) => (
                 <div key={step} className="flex gap-4 bg-[#161616] rounded-xl p-4 border border-white/[0.06]">
@@ -549,14 +761,15 @@ export default function Home() {
               ))}
             </div>
 
-            <div className="bg-[#161616] rounded-xl p-4 border border-amber-500/20">
-              <p className="text-sm font-bold text-amber-400 mb-2">APIキーの取得方法</p>
+            <div className="bg-[#161616] rounded-xl p-4 border border-blue-500/20">
+              <p className="text-sm font-bold text-blue-400 mb-2">Gemini APIキーの取得（無料）</p>
               <ol className="text-[12px] text-gray-400 space-y-1 list-decimal list-inside">
-                <li>console.anthropic.com にアクセス</li>
-                <li>アカウント作成 / ログイン</li>
-                <li>左メニュー「API Keys」→「Create Key」</li>
-                <li>生成されたキー（sk-ant-...）をコピーして設定</li>
+                <li>aistudio.google.com にアクセス</li>
+                <li>Googleアカウントでログイン</li>
+                <li>「Get API key」→「Create API key」</li>
+                <li>生成されたキー（AIza...）をコピーして設定</li>
               </ol>
+              <p className="text-[11px] text-gray-600 mt-2">無料枠: 15リクエスト/分・100万トークン/日</p>
             </div>
           </div>
         )}
