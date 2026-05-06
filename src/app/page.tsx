@@ -348,7 +348,7 @@ export default function Home() {
               <div className="pt-4 pb-2">
                 <div className="neon-badge mb-4">AI バズ投稿テーマ生成</div>
                 <h2 className="text-4xl font-black leading-tight tracking-tight mb-3">
-                  <span className="neon-text">フックの強さ</span>が、<br />
+                  <span className="neon-text text-[43px] sm:text-4xl">フックの強さ</span>が、<br />
                   投稿の刺さりを決める。
                 </h2>
                 <p className="text-text-secondary text-sm leading-relaxed">
