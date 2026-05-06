@@ -240,7 +240,7 @@ ${refStyles}
 - 全${count}件、内容重複なし
 - 日本語で出力`
 
-      const maxTok = count <= 25 ? 4000 : count <= 50 ? 6000 : 10000
+      const maxTok = count <= 25 ? 8000 : count <= 50 ? 16000 : 32000
       const text = await callLLM(prompt, maxTok)
 
       setProgress(85)
