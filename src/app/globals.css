@@ -6,18 +6,54 @@
   -webkit-tap-highlight-color: transparent;
 }
 
-body {
-  background-color: #0a0a0a;
-  color: white;
+@layer base {
+  html {
+    font-family: "Meiryo UI", "Noto Sans JP", sans-serif;
+  }
+  body {
+    background-color: #0A0A1E;
+    color: #F8FAFC;
+    background-image:
+      radial-gradient(at 15% 25%, rgba(168, 85, 247, 0.18) 0%, transparent 55%),
+      radial-gradient(at 85% 75%, rgba(6, 182, 212, 0.12) 0%, transparent 55%);
+    background-attachment: fixed;
+    min-height: 100vh;
+  }
 }
 
-::-webkit-scrollbar {
-  width: 4px;
+@layer components {
+  .glass-card {
+    @apply bg-bg-card/70 backdrop-blur-md border border-white/[0.08] rounded-2xl shadow-glass;
+  }
+  .glass-card-hover {
+    @apply glass-card hover:border-neon-purple/30 hover:shadow-neon-sm transition-all duration-300;
+  }
+  .neon-button {
+    @apply bg-neon-gradient text-white font-bold rounded-xl px-6 py-3
+           shadow-neon-purple hover:shadow-neon-cyan hover:scale-[1.02]
+           active:scale-[0.98] transition-all duration-200;
+  }
+  .neon-text {
+    @apply bg-clip-text text-transparent bg-neon-gradient;
+  }
+  .neon-badge {
+    @apply inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold
+           bg-neon-purple/10 text-neon-purple border border-neon-purple/30;
+  }
+  .input-neon {
+    @apply w-full bg-bg-base/80 border border-white/10 rounded-xl px-4 py-3
+           text-text-primary placeholder:text-text-muted
+           focus:outline-none focus:border-neon-purple/50 focus:shadow-neon-sm
+           transition-all duration-200;
+  }
+  .tab-active {
+    @apply text-white;
+  }
+  .tab-inactive {
+    @apply text-text-muted hover:text-text-secondary;
+  }
 }
-::-webkit-scrollbar-track {
-  background: #0a0a0a;
-}
-::-webkit-scrollbar-thumb {
-  background: #333;
-  border-radius: 2px;
-}
+
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: #0A0A1E; }
+::-webkit-scrollbar-thumb { background: rgba(168, 85, 247, 0.4); border-radius: 2px; }
