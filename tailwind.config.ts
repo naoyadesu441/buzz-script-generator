@@ -16,8 +16,8 @@ const config: Config = {
         'bg-elevated': '#161632',
         'border-neon': 'rgba(168, 85, 247, 0.2)',
         'text-primary': '#F8FAFC',
-        'text-secondary': '#94A3B8',
-        'text-muted': '#4B5563',
+        'text-secondary': '#C4D0DE',
+        'text-muted': '#8B9DB0',
       },
       backgroundImage: {
         'neon-gradient': 'linear-gradient(135deg, #A855F7 0%, #06B6D4 100%)',

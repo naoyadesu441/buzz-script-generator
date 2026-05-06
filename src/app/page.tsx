@@ -404,7 +404,7 @@ export default function Home() {
             <div className="glass-card p-5 space-y-6">
               {/* 出力先 */}
               <div>
-                <p className="text-[11px] text-text-muted mb-3 font-semibold uppercase tracking-widest">出力先</p>
+                <p className="text-[11px] text-text-secondary mb-3 font-semibold uppercase tracking-widest">出力先</p>
                 <div className="grid grid-cols-2 gap-2">
                   {OUTPUT_PLATFORMS.map(p => (
                     <button key={p} onClick={() => setOutputPlatform(p)}
@@ -423,7 +423,7 @@ export default function Home() {
               {/* 参考媒体 */}
               <div>
                 <p className="text-[11px] text-text-muted mb-1 font-semibold uppercase tracking-widest">バズスタイルの参考元（複数選択可）</p>
-                <p className="text-[11px] text-text-muted/60 mb-3">※ 実際の投稿を取得するのではなく、各媒体のバズパターンをAIに指示します</p>
+                <p className="text-[11px] text-text-muted mb-3">※ 実際の投稿を取得するのではなく、各媒体のバズパターンをAIに指示します</p>
                 <div className="flex flex-wrap gap-2">
                   {REFERENCE_PLATFORMS.map(p => (
                     <button key={p} onClick={() => toggleReferencePlatform(p)}
@@ -441,7 +441,7 @@ export default function Home() {
 
               {/* テーマ */}
               <div>
-                <p className="text-[11px] text-text-muted mb-3 font-semibold uppercase tracking-widest">テーマ・ジャンル</p>
+                <p className="text-[11px] text-text-secondary mb-3 font-semibold uppercase tracking-widest">テーマ・ジャンル</p>
                 <div className="flex gap-2 mb-3">
                   {(['manual', 'suggest'] as ThemeMode[]).map(m => (
                     <button key={m} onClick={() => setThemeMode(m)}
@@ -495,7 +495,7 @@ export default function Home() {
 
               {/* 生成本数 */}
               <div>
-                <p className="text-[11px] text-text-muted mb-3 font-semibold uppercase tracking-widest">生成本数</p>
+                <p className="text-[11px] text-text-secondary mb-3 font-semibold uppercase tracking-widest">生成本数</p>
                 <div className="flex gap-2">
                   {[25, 50, 100].map(n => (
                     <button key={n} onClick={() => setCount(n)}
