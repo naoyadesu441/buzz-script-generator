@@ -422,7 +422,8 @@ export default function Home() {
 
               {/* 参考媒体 */}
               <div>
-                <p className="text-[11px] text-text-muted mb-3 font-semibold uppercase tracking-widest">参考にする媒体（複数選択可）</p>
+                <p className="text-[11px] text-text-muted mb-1 font-semibold uppercase tracking-widest">バズスタイルの参考元（複数選択可）</p>
+                <p className="text-[11px] text-text-muted/60 mb-3">※ 実際の投稿を取得するのではなく、各媒体のバズパターンをAIに指示します</p>
                 <div className="flex flex-wrap gap-2">
                   {REFERENCE_PLATFORMS.map(p => (
                     <button key={p} onClick={() => toggleReferencePlatform(p)}
@@ -435,7 +436,7 @@ export default function Home() {
                     </button>
                   ))}
                 </div>
-                <p className="text-[11px] text-text-muted mt-2">選んだ媒体のバズパターンをミックスして生成します</p>
+                <p className="text-[11px] text-text-muted mt-2">選んだ媒体の文体・フック・投稿スタイルをAIの学習知識からミックスして生成します</p>
               </div>
 
               {/* テーマ */}
@@ -632,7 +633,7 @@ export default function Home() {
               {[
                 { step: '1', title: 'Gemini APIキーを設定する', body: '画面上部またはヘッダーの「API未設定」ボタンからキーを入力。Gemini API は無料枠で利用できます。' },
                 { step: '2', title: '出力先を選ぶ', body: 'Threads または Instagram を選択。それぞれの文体・長さ・ハッシュタグ使用量に最適化されたアイデアが生成されます。' },
-                { step: '3', title: '参考にする媒体を選ぶ', body: 'YouTube・Threads・TikTok・X・Instagramから複数選択可。選んだ媒体のバズパターンをミックスして生成します。' },
+                { step: '3', title: 'バズスタイルの参考元を選ぶ', body: 'YouTube・Threads・TikTok・X・Instagramから複数選択可。各媒体の文体・フックスタイルをAIの学習知識からミックスします。実際の投稿を取得するわけではありません。' },
                 { step: '4', title: 'テーマを決める', body: '「直接入力」でテーマを自由記述、または「AIに提案させる」で大ジャンルを選んで具体テーマを5案自動生成。' },
                 { step: '5', title: '生成してCSVエクスポート', body: '25/50/100本を選んで「生成する」。完了後にCSVエクスポートでスプレッドシートに保存できます。' },
               ].map(({ step, title, body }) => (
