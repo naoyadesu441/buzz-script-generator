@@ -232,11 +232,13 @@ ${refStyles}
 【テーマ】${activeTheme.trim()}
 
 上記を踏まえ、${count}本のバズる投稿アイデアをJSON形式のみで返してください（前後の説明文不要）:
-{"ideas":[{"id":1,"hook":"読者が止まる強い一行","body":"本文（${outputPlatform}の最適な長さ・文体）","hashtags":"#タグ1 #タグ2"},{"id":2,"hook":"...","body":"...","hashtags":"..."},...]}
+{"ideas":[{"id":1,"hook":"読者が止まる強い一行","body":"本文","hashtags":"#タグ1 #タグ2 #タグ3"},{"id":2,"hook":"別の切り口の一行","body":"別の本文","hashtags":"#別タグ1 #別タグ2 #別タグ3"}]}
 
 ルール:
 - hookは数字・問いかけ・共感・驚き・逆説など多様なパターンで
 - bodyは${outputPlatform}に最適な長さ・文体・改行
+- **全${count}件すべてに hashtags を必ず入れる**（空文字・省略・"..."禁止、毎件ユニークなタグを${outputPlatform === 'Instagram' ? '5〜10' : '3〜5'}個）
+- ${outputPlatform === 'Instagram' ? 'Instagram は保存・発見性のためハッシュタグを多めに' : ''}
 - 全${count}件、内容重複なし
 - 日本語で出力`
 
