@@ -24,6 +24,12 @@ interface Generation {
   createdAt: string
 }
 
+interface DailyUsage {
+  tokens: number
+  requests: number
+  date: string // YYYY-MM-DD JST
+}
+
 const OUTPUT_PLATFORMS: OutputPlatform[] = ['Threads', 'Instagram']
 const REFERENCE_PLATFORMS: ReferencePlatform[] = ['YouTube', 'Threads', 'TikTok', 'X', 'Instagram']
 
@@ -54,6 +60,28 @@ const HOW_TO_GET_KEY = [
   { step: '4', text: '生成されたキー（AIza...）をコピーして貼り付け' },
 ]
 
+// Gemini 2.5 Flash 無料枠上限
+const FREE_TOKEN_LIMIT = 1_000_000
+const FREE_REQUEST_LIMIT = 1500
+
+const getTodayStr = () => {
+  const now = new Date()
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+}
+
+const USAGE_KEY = 'buzz_usage_v1'
+
+const loadUsage = (): DailyUsage => {
+  try {
+    const raw = localStorage.getItem(USAGE_KEY)
+    if (raw) {
+      const parsed = JSON.parse(raw) as DailyUsage
+      if (parsed.date === getTodayStr()) return parsed
+    }
+  } catch {}
+  return { tokens: 0, requests: 0, date: getTodayStr() }
+}
+
 export default function Home() {
   const [tab, setTab] = useState<Tab>('generate')
 
@@ -61,6 +89,8 @@ export default function Home() {
   const [showApiModal, setShowApiModal] = useState(false)
   const [apiKeyInput, setApiKeyInput] = useState('')
   const [showHowToGet, setShowHowToGet] = useState(false)
+
+  const [dailyUsage, setDailyUsage] = useState<DailyUsage>({ tokens: 0, requests: 0, date: '' })
 
   const [outputPlatform, setOutputPlatform] = useState<OutputPlatform>('Threads')
   const [referencePlatforms, setReferencePlatforms] = useState<Set<ReferencePlatform>>(
@@ -90,8 +120,23 @@ export default function Home() {
     const gKey = localStorage.getItem('buzz_key_gemini') || ''
     const hist = localStorage.getItem('buzz_history')
     setGeminiKey(gKey)
+    setDailyUsage(loadUsage())
     if (hist) { try { setHistory(JSON.parse(hist)) } catch {} }
   }, [])
+
+  const addUsage = (tokens: number) => {
+    setDailyUsage(prev => {
+      const today = getTodayStr()
+      const base = prev.date === today ? prev : { tokens: 0, requests: 0, date: today }
+      const updated: DailyUsage = {
+        tokens: base.tokens + tokens,
+        requests: base.requests + 1,
+        date: today,
+      }
+      localStorage.setItem(USAGE_KEY, JSON.stringify(updated))
+      return updated
+    })
+  }
 
   const openApiModal = () => {
     setApiKeyInput(geminiKey)
@@ -134,9 +179,15 @@ export default function Home() {
     )
     if (!res.ok) {
       const d = await res.json().catch(() => ({}))
-      throw new Error((d as { error?: { message?: string } }).error?.message || `Gemini APIエラー: ${res.status}`)
+      const msg = (d as { error?: { message?: string } }).error?.message || ''
+      if (res.status === 429 || msg.toLowerCase().includes('quota') || msg.toLowerCase().includes('resource_exhausted')) {
+        throw new Error('QUOTA_EXCEEDED')
+      }
+      throw new Error(msg || `Gemini APIエラー: ${res.status}`)
     }
     const d = await res.json()
+    const totalTokens: number = (d.usageMetadata?.totalTokenCount as number) ?? 0
+    if (totalTokens > 0) addUsage(totalTokens)
     return d.candidates?.[0]?.content?.parts?.[0]?.text || ''
   }
 
@@ -160,7 +211,8 @@ JSON形式のみで返答（説明文不要）:
       const data = JSON.parse(jsonMatch[0])
       setSuggestedThemes(data.themes || [])
     } catch (err: unknown) {
-      setSuggestionError(err instanceof Error ? err.message : String(err))
+      const msg = err instanceof Error ? err.message : String(err)
+      setSuggestionError(msg === 'QUOTA_EXCEEDED' ? '本日の無料枠を使い切りました。明日0時にリセットされます。' : msg)
     } finally {
       setIsSuggesting(false)
     }
@@ -239,7 +291,8 @@ ${refStyles}
       setHistory(newHistory)
       localStorage.setItem('buzz_history', JSON.stringify(newHistory))
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : String(err))
+      const msg = err instanceof Error ? err.message : String(err)
+      setError(msg)
       setProgress(0)
       setProgressMsg('')
     } finally {
@@ -285,6 +338,19 @@ ${refStyles}
 
   const canGenerate = !!geminiKey && !!activeTheme.trim() && !isGenerating
 
+  // 使用量ゲージ計算
+  const tokenPct = Math.min((dailyUsage.tokens / FREE_TOKEN_LIMIT) * 100, 100)
+  const reqPct = Math.min((dailyUsage.requests / FREE_REQUEST_LIMIT) * 100, 100)
+  const gaugeColor =
+    tokenPct >= 90 ? 'bg-red-500' :
+    tokenPct >= 70 ? 'bg-amber-500' :
+    'bg-emerald-500'
+  const gaugeTextColor =
+    tokenPct >= 90 ? 'text-red-400' :
+    tokenPct >= 70 ? 'text-amber-400' :
+    'text-emerald-400'
+  const isQuotaError = error === 'QUOTA_EXCEEDED'
+
   /* ── Gemini API キー入力 UI（モーダル内・未設定バナー共通） ── */
   const ApiKeyForm = ({ onSave, onCancel }: { onSave: () => void; onCancel?: () => void }) => (
     <div className="space-y-4">
@@ -301,7 +367,7 @@ ${refStyles}
           autoFocus
           onKeyDown={e => e.key === 'Enter' && onSave()}
         />
-        <p className="text-[11px] text-gray-600 mt-1.5">無料枠: 15リクエスト/分・100万トークン/日</p>
+        <p className="text-[11px] text-gray-600 mt-1.5">無料枠: 15 RPM・1日 100万トークン・自動課金なし</p>
       </div>
 
       {/* How to get key accordion */}
@@ -353,6 +419,63 @@ ${refStyles}
       </div>
     </div>
   )
+
+  /* ── 使用量ゲージ UI ── */
+  const UsageGauge = () => {
+    if (!geminiKey) return null
+    return (
+      <div className="bg-[#161616] rounded-2xl p-4 border border-white/[0.06] space-y-3">
+        <div className="flex items-center justify-between">
+          <p className="text-[11px] text-gray-500 font-medium uppercase tracking-wider">本日の使用量（Gemini 無料枠）</p>
+          <span className={`text-[11px] font-bold ${gaugeTextColor}`}>
+            {tokenPct.toFixed(1)}%
+          </span>
+        </div>
+
+        {/* Token gauge */}
+        <div>
+          <div className="flex justify-between text-[11px] mb-1.5">
+            <span className="text-gray-500">トークン</span>
+            <span className={gaugeTextColor}>
+              {dailyUsage.tokens.toLocaleString()} / {FREE_TOKEN_LIMIT.toLocaleString()}
+            </span>
+          </div>
+          <div className="h-2 bg-[#2a2a2a] rounded-full overflow-hidden">
+            <div
+              className={`h-full rounded-full transition-all duration-700 ${gaugeColor}`}
+              style={{ width: `${tokenPct}%` }}
+            />
+          </div>
+        </div>
+
+        {/* Request gauge */}
+        <div>
+          <div className="flex justify-between text-[11px] mb-1.5">
+            <span className="text-gray-500">リクエスト数</span>
+            <span className="text-gray-400">
+              {dailyUsage.requests} / {FREE_REQUEST_LIMIT}
+            </span>
+          </div>
+          <div className="h-1.5 bg-[#2a2a2a] rounded-full overflow-hidden">
+            <div
+              className={`h-full rounded-full transition-all duration-700 ${reqPct >= 90 ? 'bg-red-500' : reqPct >= 70 ? 'bg-amber-500' : 'bg-emerald-500/70'}`}
+              style={{ width: `${reqPct}%` }}
+            />
+          </div>
+        </div>
+
+        {tokenPct >= 90 ? (
+          <p className="text-[11px] text-red-400 bg-red-500/10 rounded-lg px-3 py-2">
+            ⚠ 無料枠の残りがわずかです
+          </p>
+        ) : (
+          <p className="text-[11px] text-gray-600">
+            上限を超えると翌日0時に自動リセット。課金は一切発生しません。
+          </p>
+        )}
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen bg-[#0a0a0a] text-white font-sans">
@@ -429,6 +552,9 @@ ${refStyles}
                 />
               </div>
             )}
+
+            {/* 使用量ゲージ */}
+            <UsageGauge />
 
             {ideas.length === 0 && !isGenerating && geminiKey && (
               <div className="py-2 pb-4">
@@ -616,10 +742,19 @@ ${refStyles}
                 <p className="text-[12px] text-emerald-400 text-center">{progressMsg}</p>
               )}
 
+              {/* エラー表示 */}
               {error && (
-                <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3">
-                  <p className="text-[12px] text-red-400">{error}</p>
-                </div>
+                isQuotaError ? (
+                  <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-4 space-y-1.5">
+                    <p className="text-[13px] text-amber-400 font-bold">本日の無料枠を使い切りました</p>
+                    <p className="text-[12px] text-gray-400">翌日0時（日本時間）に自動でリセットされます。</p>
+                    <p className="text-[12px] text-gray-400">課金は一切発生しません。明日また使えます。</p>
+                  </div>
+                ) : (
+                  <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3">
+                    <p className="text-[12px] text-red-400">{error}</p>
+                  </div>
+                )
               )}
             </div>
 
@@ -789,7 +924,7 @@ ${refStyles}
               >
                 Google AI Studio を開く →
               </a>
-              <p className="text-[11px] text-gray-600">無料枠: 15リクエスト/分・100万トークン/日</p>
+              <p className="text-[11px] text-gray-600">無料枠: 15 RPM・1日100万トークン・自動課金なし・翌日0時リセット</p>
             </div>
           </div>
         )}
