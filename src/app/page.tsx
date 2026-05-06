@@ -357,8 +357,8 @@ export default function Home() {
               </div>
             )}
 
-            {/* Hero（キー設定済・未生成時） */}
-            {ideas.length === 0 && !isGenerating && geminiKey && (
+            {/* Hero（未生成時） */}
+            {ideas.length === 0 && !isGenerating && (
               <div className="pt-4 pb-2">
                 <div className="neon-badge mb-4">AI バズ投稿テーマ生成</div>
                 <h2 className="text-4xl font-black leading-tight tracking-tight mb-3">
@@ -366,7 +366,7 @@ export default function Home() {
                   投稿の刺さりを決める。
                 </h2>
                 <p className="text-text-secondary text-sm leading-relaxed">
-                  テーマと媒体を選ぶだけで、AIがバズネタを<br className="hidden sm:block" />25〜100本まとめて生成します。
+                  テーマと媒体を選ぶだけで、AIがバズネタを<br />25〜100本まとめて生成します。
                 </p>
               </div>
             )}
