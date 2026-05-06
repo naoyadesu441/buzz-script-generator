@@ -54,7 +54,7 @@ const GENRE_OPTIONS = [
 ]
 
 const HOW_TO_GET_KEY = [
-  { step: '1', text: 'aistudio.google.com にアクセス' },
+  { step: '1', text: 'Google AI Studio にアクセス', href: 'https://aistudio.google.com/apikey' },
   { step: '2', text: 'Googleアカウントでサインイン' },
   { step: '3', text: '「Get API key」→「Create API key」' },
   { step: '4', text: '生成されたキー（AIza...）をコピーして貼り付け' },
@@ -251,10 +251,13 @@ export default function Home() {
       </button>
       {showHowToGet && (
         <div className="px-4 pb-4 border-t border-neon-purple/10 pt-3 space-y-2.5">
-          {HOW_TO_GET_KEY.map(({ step, text }) => (
+          {HOW_TO_GET_KEY.map(({ step, text, href }) => (
             <div key={step} className="flex items-start gap-3">
               <div className="w-5 h-5 rounded-full bg-neon-gradient flex items-center justify-center text-[10px] font-bold text-white shrink-0 mt-0.5">{step}</div>
-              <p className="text-[12px] text-text-secondary">{text}</p>
+              {href
+                ? <a href={href} target="_blank" rel="noopener noreferrer" className="text-[12px] text-neon-cyan hover:underline">{text}</a>
+                : <p className="text-[12px] text-text-secondary">{text}</p>
+              }
             </div>
           ))}
           <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer"
