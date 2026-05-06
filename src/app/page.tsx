@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react'
 
-type Provider = 'gemini' | 'claude'
 type OutputPlatform = 'Threads' | 'Instagram'
 type ReferencePlatform = 'YouTube' | 'Threads' | 'TikTok' | 'X' | 'Instagram'
 type Tab = 'generate' | 'history' | 'guide'
@@ -20,7 +19,6 @@ interface Generation {
   theme: string
   outputPlatform: OutputPlatform
   referencePlatforms: string[]
-  provider: Provider
   count: number
   ideas: PostIdea[]
   createdAt: string
@@ -49,25 +47,27 @@ const GENRE_OPTIONS = [
   '勉強・学習', 'エンタメ・趣味', 'テクノロジー・AI',
 ]
 
+const HOW_TO_GET_KEY = [
+  { step: '1', text: 'aistudio.google.com にアクセス' },
+  { step: '2', text: 'Googleアカウントでサインイン' },
+  { step: '3', text: '「Get API key」→「Create API key」' },
+  { step: '4', text: '生成されたキー（AIza...）をコピーして貼り付け' },
+]
+
 export default function Home() {
   const [tab, setTab] = useState<Tab>('generate')
 
-  // API Provider
-  const [provider, setProvider] = useState<Provider>('gemini')
   const [geminiKey, setGeminiKey] = useState('')
-  const [claudeKey, setClaudeKey] = useState('')
   const [showApiModal, setShowApiModal] = useState(false)
   const [apiKeyInput, setApiKeyInput] = useState('')
-  const [providerInput, setProviderInput] = useState<Provider>('gemini')
+  const [showHowToGet, setShowHowToGet] = useState(false)
 
-  // Generation settings
   const [outputPlatform, setOutputPlatform] = useState<OutputPlatform>('Threads')
   const [referencePlatforms, setReferencePlatforms] = useState<Set<ReferencePlatform>>(
     new Set(REFERENCE_PLATFORMS)
   )
   const [count, setCount] = useState(100)
 
-  // Theme
   const [themeMode, setThemeMode] = useState<ThemeMode>('manual')
   const [manualTheme, setManualTheme] = useState('')
   const [genre, setGenre] = useState('')
@@ -76,7 +76,6 @@ export default function Home() {
   const [isSuggesting, setIsSuggesting] = useState(false)
   const [suggestionError, setSuggestionError] = useState('')
 
-  // Generation
   const [isGenerating, setIsGenerating] = useState(false)
   const [progress, setProgress] = useState(0)
   const [progressMsg, setProgressMsg] = useState('')
@@ -85,39 +84,25 @@ export default function Home() {
   const [error, setError] = useState('')
   const [copiedId, setCopiedId] = useState<number | null>(null)
 
-  // History
   const [history, setHistory] = useState<Generation[]>([])
 
   useEffect(() => {
-    const prov = (localStorage.getItem('buzz_provider') as Provider) || 'gemini'
     const gKey = localStorage.getItem('buzz_key_gemini') || ''
-    const cKey = localStorage.getItem('buzz_key_claude') || ''
     const hist = localStorage.getItem('buzz_history')
-    setProvider(prov)
     setGeminiKey(gKey)
-    setClaudeKey(cKey)
     if (hist) { try { setHistory(JSON.parse(hist)) } catch {} }
   }, [])
 
-  const currentKey = provider === 'gemini' ? geminiKey : claudeKey
-
   const openApiModal = () => {
-    setProviderInput(provider)
-    setApiKeyInput(provider === 'gemini' ? geminiKey : claudeKey)
+    setApiKeyInput(geminiKey)
+    setShowHowToGet(false)
     setShowApiModal(true)
   }
 
   const saveApiKey = () => {
     const trimmed = apiKeyInput.trim()
-    setProvider(providerInput)
-    localStorage.setItem('buzz_provider', providerInput)
-    if (providerInput === 'gemini') {
-      setGeminiKey(trimmed)
-      localStorage.setItem('buzz_key_gemini', trimmed)
-    } else {
-      setClaudeKey(trimmed)
-      localStorage.setItem('buzz_key_claude', trimmed)
-    }
+    setGeminiKey(trimmed)
+    localStorage.setItem('buzz_key_gemini', trimmed)
     setShowApiModal(false)
   }
 
@@ -131,55 +116,32 @@ export default function Home() {
     setReferencePlatforms(next)
   }
 
-  const callLLM = async (prompt: string, maxTokens: number): Promise<string> => {
-    if (provider === 'gemini') {
-      const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${currentKey}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: prompt }] }],
-            generationConfig: {
-              responseMimeType: 'application/json',
-              maxOutputTokens: maxTokens,
-              thinkingConfig: { thinkingBudget: 0 },
-            },
-          }),
-        }
-      )
-      if (!res.ok) {
-        const d = await res.json().catch(() => ({}))
-        throw new Error((d as { error?: { message?: string } }).error?.message || `Gemini APIエラー: ${res.status}`)
-      }
-      const d = await res.json()
-      return d.candidates?.[0]?.content?.parts?.[0]?.text || ''
-    } else {
-      const res = await fetch('https://api.anthropic.com/v1/messages', {
+  const callGemini = async (prompt: string, maxTokens: number): Promise<string> => {
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`,
+      {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': currentKey,
-          'anthropic-version': '2023-06-01',
-          'anthropic-dangerous-direct-browser-access': 'true',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          model: 'claude-haiku-4-5-20251001',
-          max_tokens: maxTokens,
-          messages: [{ role: 'user', content: prompt }],
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: {
+            responseMimeType: 'application/json',
+            maxOutputTokens: maxTokens,
+            thinkingConfig: { thinkingBudget: 0 },
+          },
         }),
-      })
-      if (!res.ok) {
-        const d = await res.json().catch(() => ({}))
-        throw new Error((d as { error?: { message?: string } }).error?.message || `Claude APIエラー: ${res.status}`)
       }
-      const d = await res.json()
-      return d.content?.[0]?.text || ''
+    )
+    if (!res.ok) {
+      const d = await res.json().catch(() => ({}))
+      throw new Error((d as { error?: { message?: string } }).error?.message || `Gemini APIエラー: ${res.status}`)
     }
+    const d = await res.json()
+    return d.candidates?.[0]?.content?.parts?.[0]?.text || ''
   }
 
   const suggestThemes = async () => {
-    if (!genre || !currentKey || isSuggesting) return
+    if (!genre || !geminiKey || isSuggesting) return
     setIsSuggesting(true)
     setSuggestedThemes([])
     setSelectedSuggestion('')
@@ -192,7 +154,7 @@ JSON形式のみで返答（説明文不要）:
 {"themes":["テーマ1","テーマ2","テーマ3","テーマ4","テーマ5"]}`
 
     try {
-      const text = await callLLM(prompt, 512)
+      const text = await callGemini(prompt, 512)
       const jsonMatch = text.match(/\{[\s\S]*\}/)
       if (!jsonMatch) throw new Error('解析失敗。再度お試しください。')
       const data = JSON.parse(jsonMatch[0])
@@ -207,7 +169,7 @@ JSON形式のみで返答（説明文不要）:
   const activeTheme = themeMode === 'manual' ? manualTheme : selectedSuggestion
 
   const generate = async () => {
-    if (!currentKey || !activeTheme.trim() || isGenerating) return
+    if (!geminiKey || !activeTheme.trim() || isGenerating) return
     setIsGenerating(true)
     setProgress(5)
     setProgressMsg('APIに接続中...')
@@ -243,7 +205,7 @@ ${refStyles}
 - 日本語で出力`
 
       const maxTok = count <= 25 ? 8000 : count <= 50 ? 16000 : 32000
-      const text = await callLLM(prompt, maxTok)
+      const text = await callGemini(prompt, maxTok)
 
       setProgress(85)
       setProgressMsg('データを解析中...')
@@ -269,7 +231,6 @@ ${refStyles}
         theme: activeTheme.trim(),
         outputPlatform,
         referencePlatforms: refList,
-        provider,
         count: newIdeas.length,
         ideas: newIdeas,
         createdAt: new Date().toISOString(),
@@ -322,7 +283,76 @@ ${refStyles}
     localStorage.setItem('buzz_history', JSON.stringify(updated))
   }
 
-  const canGenerate = !!currentKey && !!activeTheme.trim() && !isGenerating
+  const canGenerate = !!geminiKey && !!activeTheme.trim() && !isGenerating
+
+  /* ── Gemini API キー入力 UI（モーダル内・未設定バナー共通） ── */
+  const ApiKeyForm = ({ onSave, onCancel }: { onSave: () => void; onCancel?: () => void }) => (
+    <div className="space-y-4">
+      <div>
+        <label className="text-[11px] text-gray-500 font-medium block mb-2">
+          Gemini API キー
+        </label>
+        <input
+          type="password"
+          value={apiKeyInput}
+          onChange={e => setApiKeyInput(e.target.value)}
+          placeholder="AIza..."
+          className="w-full bg-[#0a0a0a] border border-white/15 rounded-xl px-4 py-3 text-sm font-mono focus:outline-none focus:border-white/30 placeholder-gray-700 transition-colors"
+          autoFocus
+          onKeyDown={e => e.key === 'Enter' && onSave()}
+        />
+        <p className="text-[11px] text-gray-600 mt-1.5">無料枠: 15リクエスト/分・100万トークン/日</p>
+      </div>
+
+      {/* How to get key accordion */}
+      <div className="border border-white/10 rounded-xl overflow-hidden">
+        <button
+          onClick={() => setShowHowToGet(v => !v)}
+          className="w-full flex items-center justify-between px-4 py-3 text-[13px] text-blue-400 font-medium hover:bg-white/5 transition-colors"
+        >
+          <span>🔑 Gemini API キーの取得方法（無料）</span>
+          <span className="text-gray-500 text-[11px]">{showHowToGet ? '▲ 閉じる' : '▼ 見る'}</span>
+        </button>
+        {showHowToGet && (
+          <div className="px-4 pb-4 space-y-2.5 border-t border-white/10 pt-3">
+            {HOW_TO_GET_KEY.map(({ step, text }) => (
+              <div key={step} className="flex items-start gap-3">
+                <div className="w-5 h-5 rounded-full bg-blue-500/20 text-blue-400 flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5">
+                  {step}
+                </div>
+                <p className="text-[12px] text-gray-400">{text}</p>
+              </div>
+            ))}
+            <a
+              href="https://aistudio.google.com/apikey"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="block mt-3 text-center py-2 bg-blue-500/15 border border-blue-500/30 rounded-lg text-[13px] text-blue-400 font-semibold hover:bg-blue-500/25 transition-colors"
+            >
+              Google AI Studio を開く →
+            </a>
+          </div>
+        )}
+      </div>
+
+      <div className="flex gap-2">
+        {onCancel && (
+          <button onClick={onCancel} className="flex-1 py-2.5 border border-white/15 rounded-xl text-sm text-gray-400 hover:bg-white/5 transition-colors">
+            キャンセル
+          </button>
+        )}
+        <button
+          onClick={onSave}
+          disabled={!apiKeyInput.trim()}
+          className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition-all ${
+            apiKeyInput.trim() ? 'bg-white text-black hover:bg-gray-100' : 'bg-[#222] text-gray-600 cursor-not-allowed'
+          }`}
+        >
+          保存する
+        </button>
+      </div>
+    </div>
+  )
 
   return (
     <div className="min-h-screen bg-[#0a0a0a] text-white font-sans">
@@ -337,14 +367,12 @@ ${refStyles}
             <button
               onClick={openApiModal}
               className={`text-[11px] px-3 py-1.5 rounded-full border font-medium transition-all ${
-                currentKey
-                  ? 'border-emerald-500/50 text-emerald-400 bg-emerald-500/10'
-                  : 'border-amber-500/50 text-amber-400 bg-amber-500/10'
+                geminiKey
+                  ? 'border-emerald-500/50 text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20'
+                  : 'border-amber-500/50 text-amber-400 bg-amber-500/10 hover:bg-amber-500/20'
               }`}
             >
-              {currentKey
-                ? `✓ ${provider === 'gemini' ? 'Gemini' : 'Claude'} 設定済`
-                : '⚠ API未設定'}
+              {geminiKey ? '✓ Gemini 設定済' : '⚠ API未設定'}
             </button>
           </div>
 
@@ -365,55 +393,15 @@ ${refStyles}
         </div>
       </header>
 
-      {/* API Modal */}
+      {/* API Modal（キー変更用） */}
       {showApiModal && (
         <div
           className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/80 p-4"
           onClick={e => { if (e.target === e.currentTarget) setShowApiModal(false) }}
         >
           <div className="w-full max-w-sm bg-[#1c1c1c] rounded-2xl p-6 border border-white/10">
-            <h2 className="font-bold text-base mb-4">API設定</h2>
-
-            <p className="text-[11px] text-gray-500 mb-2">使用するAPI</p>
-            <div className="flex gap-2 mb-4">
-              {(['gemini', 'claude'] as Provider[]).map(p => (
-                <button
-                  key={p}
-                  onClick={() => { setProviderInput(p); setApiKeyInput(p === 'gemini' ? geminiKey : claudeKey) }}
-                  className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition-all ${
-                    providerInput === p ? 'bg-white text-black' : 'bg-[#2a2a2a] text-gray-400'
-                  }`}
-                >
-                  {p === 'gemini' ? 'Gemini（無料枠）' : 'Claude（有料）'}
-                </button>
-              ))}
-            </div>
-
-            <p className="text-[11px] text-gray-500 mb-2">
-              {providerInput === 'gemini'
-                ? 'Gemini APIキー（aistudio.google.com → API keys）'
-                : 'Anthropic APIキー（console.anthropic.com）'}
-            </p>
-            <input
-              type="password"
-              value={apiKeyInput}
-              onChange={e => setApiKeyInput(e.target.value)}
-              placeholder={providerInput === 'gemini' ? 'AIza...' : 'sk-ant-...'}
-              className="w-full bg-[#0a0a0a] border border-white/15 rounded-xl px-4 py-3 text-sm font-mono mb-3 focus:outline-none focus:border-white/30 placeholder-gray-700"
-              autoFocus
-              onKeyDown={e => e.key === 'Enter' && saveApiKey()}
-            />
-            {providerInput === 'gemini' && (
-              <p className="text-[11px] text-blue-400 mb-4">無料枠: 15リクエスト/分・100万トークン/日</p>
-            )}
-            <div className="flex gap-2">
-              <button onClick={() => setShowApiModal(false)} className="flex-1 py-2.5 border border-white/15 rounded-xl text-sm text-gray-400">
-                キャンセル
-              </button>
-              <button onClick={saveApiKey} className="flex-1 py-2.5 bg-white text-black rounded-xl text-sm font-bold">
-                保存
-              </button>
-            </div>
+            <h2 className="font-bold text-base mb-5">Gemini API キーを設定</h2>
+            <ApiKeyForm onSave={saveApiKey} onCancel={() => setShowApiModal(false)} />
           </div>
         </div>
       )}
@@ -422,7 +410,27 @@ ${refStyles}
         {/* ── 生成タブ ── */}
         {tab === 'generate' && (
           <div className="space-y-5 pt-5">
-            {ideas.length === 0 && !isGenerating && (
+            {/* API キー未設定バナー */}
+            {!geminiKey && (
+              <div className="bg-[#161616] rounded-2xl p-5 border border-amber-500/30 space-y-1">
+                <div className="flex items-center gap-2 mb-4">
+                  <span className="text-lg">🔑</span>
+                  <div>
+                    <p className="font-bold text-sm text-amber-400">まず Gemini API キーを設定してください</p>
+                    <p className="text-[11px] text-gray-500 mt-0.5">無料で利用できます。30秒で取得・設定できます。</p>
+                  </div>
+                </div>
+                <ApiKeyForm
+                  onSave={() => {
+                    const trimmed = apiKeyInput.trim()
+                    setGeminiKey(trimmed)
+                    localStorage.setItem('buzz_key_gemini', trimmed)
+                  }}
+                />
+              </div>
+            )}
+
+            {ideas.length === 0 && !isGenerating && geminiKey && (
               <div className="py-2 pb-4">
                 <h2 className="text-3xl font-black leading-tight tracking-tight mb-2">
                   フックの強さが、<br />投稿の刺さりを決める。
@@ -515,9 +523,9 @@ ${refStyles}
                       </select>
                       <button
                         onClick={suggestThemes}
-                        disabled={!genre || !currentKey || isSuggesting}
+                        disabled={!genre || !geminiKey || isSuggesting}
                         className={`px-4 py-3 rounded-xl text-sm font-bold transition-all whitespace-nowrap ${
-                          !genre || !currentKey || isSuggesting
+                          !genre || !geminiKey || isSuggesting
                             ? 'bg-[#222] text-gray-600 cursor-not-allowed'
                             : 'bg-[#333] text-white hover:bg-[#3a3a3a]'
                         }`}
@@ -550,8 +558,8 @@ ${refStyles}
                       </div>
                     )}
 
-                    {!currentKey && (
-                      <p className="text-[12px] text-amber-400">右上でAPIキーを設定すると提案が使えます</p>
+                    {!geminiKey && (
+                      <p className="text-[12px] text-amber-400">上のAPIキー設定欄を入力すると提案が使えます</p>
                     )}
                   </div>
                 )}
@@ -612,12 +620,6 @@ ${refStyles}
                 <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3">
                   <p className="text-[12px] text-red-400">{error}</p>
                 </div>
-              )}
-
-              {!currentKey && !isGenerating && (
-                <p className="text-[12px] text-amber-400 text-center">
-                  右上の「API未設定」をタップしてAPIキーを設定してください
-                </p>
               )}
             </div>
 
@@ -694,7 +696,7 @@ ${refStyles}
                       <div>
                         <p className="font-semibold text-sm">{gen.theme}</p>
                         <p className="text-[11px] text-gray-500 mt-0.5">
-                          {gen.outputPlatform} · {gen.count}本 · {(gen.provider || 'gemini').toUpperCase()} ·{' '}
+                          {gen.outputPlatform} · {gen.count}本 · Gemini ·{' '}
                           {new Date(gen.createdAt).toLocaleDateString('ja-JP', {
                             month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
                           })}
@@ -735,8 +737,8 @@ ${refStyles}
             <div className="space-y-3">
               {[
                 {
-                  step: '1', title: 'APIキーを設定する',
-                  body: '右上のボタンをタップ。Gemini（無料枠）またはClaude（有料）を選択してAPIキーを入力して保存。キーはブラウザのLocalStorageにのみ保存されます。',
+                  step: '1', title: 'Gemini APIキーを設定する',
+                  body: '画面上部またはヘッダーの「API未設定」ボタンからキーを入力。Gemini API は無料枠で利用できます。',
                 },
                 {
                   step: '2', title: '出力先を選ぶ',
@@ -767,15 +769,27 @@ ${refStyles}
               ))}
             </div>
 
-            <div className="bg-[#161616] rounded-xl p-4 border border-blue-500/20">
-              <p className="text-sm font-bold text-blue-400 mb-2">Gemini APIキーの取得（無料）</p>
-              <ol className="text-[12px] text-gray-400 space-y-1 list-decimal list-inside">
-                <li>aistudio.google.com にアクセス</li>
-                <li>Googleアカウントでログイン</li>
-                <li>「Get API key」→「Create API key」</li>
-                <li>生成されたキー（AIza...）をコピーして設定</li>
-              </ol>
-              <p className="text-[11px] text-gray-600 mt-2">無料枠: 15リクエスト/分・100万トークン/日</p>
+            <div className="bg-[#161616] rounded-xl p-4 border border-blue-500/20 space-y-3">
+              <p className="text-sm font-bold text-blue-400">🔑 Gemini APIキーの取得（無料）</p>
+              <div className="space-y-2.5">
+                {HOW_TO_GET_KEY.map(({ step, text }) => (
+                  <div key={step} className="flex items-start gap-3">
+                    <div className="w-5 h-5 rounded-full bg-blue-500/20 text-blue-400 flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5">
+                      {step}
+                    </div>
+                    <p className="text-[12px] text-gray-400">{text}</p>
+                  </div>
+                ))}
+              </div>
+              <a
+                href="https://aistudio.google.com/apikey"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="block text-center py-2.5 bg-blue-500/15 border border-blue-500/30 rounded-lg text-[13px] text-blue-400 font-semibold hover:bg-blue-500/25 transition-colors"
+              >
+                Google AI Studio を開く →
+              </a>
+              <p className="text-[11px] text-gray-600">無料枠: 15リクエスト/分・100万トークン/日</p>
             </div>
           </div>
         )}
