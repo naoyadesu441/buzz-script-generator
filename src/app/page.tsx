@@ -134,13 +134,17 @@ export default function Home() {
   const callLLM = async (prompt: string, maxTokens: number): Promise<string> => {
     if (provider === 'gemini') {
       const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${currentKey}`,
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${currentKey}`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             contents: [{ parts: [{ text: prompt }] }],
-            generationConfig: { responseMimeType: 'application/json', maxOutputTokens: maxTokens },
+            generationConfig: {
+              responseMimeType: 'application/json',
+              maxOutputTokens: maxTokens,
+              thinkingConfig: { thinkingBudget: 0 },
+            },
           }),
         }
       )
