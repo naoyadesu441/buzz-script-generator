@@ -343,20 +343,6 @@ export default function Home() {
         {/* ── 生成タブ ── */}
         {tab === 'generate' && (
           <div className="space-y-5 pt-6">
-            {/* API キー未設定バナー */}
-            {!geminiKey && (
-              <div className="glass-card p-5 border-amber-500/25">
-                <div className="flex items-center gap-2 mb-4">
-                  <span className="text-xl">🔑</span>
-                  <div>
-                    <p className="font-bold text-sm text-amber-400">まず Gemini API キーを設定してください</p>
-                    <p className="text-[11px] text-text-muted mt-0.5">無料で利用できます。30秒で取得・設定できます。</p>
-                  </div>
-                </div>
-                <ApiKeyForm onSave={() => { const t = apiKeyInput.trim(); setGeminiKey(t); localStorage.setItem('buzz_key_gemini', t) }} />
-              </div>
-            )}
-
             {/* Hero（未生成時） */}
             {ideas.length === 0 && !isGenerating && (
               <div className="pt-4 pb-2">
@@ -368,6 +354,20 @@ export default function Home() {
                 <p className="text-text-secondary text-sm leading-relaxed">
                   テーマと媒体を選ぶだけで、AIがバズネタを<br />25〜100本まとめて生成します。
                 </p>
+              </div>
+            )}
+
+            {/* API キー未設定バナー */}
+            {!geminiKey && (
+              <div className="glass-card p-5 border-amber-500/25">
+                <div className="flex items-center gap-2 mb-4">
+                  <span className="text-xl">🔑</span>
+                  <div>
+                    <p className="font-bold text-sm text-amber-400">まず Gemini API キーを設定してください</p>
+                    <p className="text-[11px] text-text-muted mt-0.5">無料で利用できます。30秒で取得・設定できます。</p>
+                  </div>
+                </div>
+                <ApiKeyForm onSave={() => { const t = apiKeyInput.trim(); setGeminiKey(t); localStorage.setItem('buzz_key_gemini', t) }} />
               </div>
             )}
 
