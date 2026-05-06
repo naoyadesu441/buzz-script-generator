@@ -300,9 +300,9 @@ export default function Home() {
           <div className="flex items-center justify-between mb-4">
             <div>
               <h1 className="text-[34px] font-bold tracking-tight text-text-primary leading-tight">
-                <span className="neon-text">バズネタ</span>100本ジェネレーター
+                <span className="neon-text">バズネタ</span>100本<br className="sm:hidden" />ジェネレーター
               </h1>
-              <p className="text-[23px] text-text-muted mt-0.5">Threads / Instagram 投稿アイデアを一括生成</p>
+              <p className="text-[23px] text-text-muted mt-0.5">Threads / Instagram<br className="sm:hidden" />投稿アイデアを一括生成</p>
             </div>
             <button onClick={openApiModal}
               className={`text-[11px] px-3 py-1.5 rounded-full border font-medium transition-all ${
