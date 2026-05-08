@@ -148,27 +148,40 @@ export default function Home() {
   }
 
   const callGemini = async (prompt: string, maxTokens: number): Promise<string> => {
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { responseMimeType: 'application/json', maxOutputTokens: maxTokens, thinkingConfig: { thinkingBudget: 0 } },
-        }),
+    const MAX_RETRIES = 3
+    let lastError: Error = new Error('Unknown error')
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+      if (attempt > 0) {
+        const delay = Math.min(1000 * 2 ** attempt, 16000)
+        await new Promise(r => setTimeout(r, delay))
       }
-    )
-    if (!res.ok) {
-      const d = await res.json().catch(() => ({}))
-      const msg = (d as { error?: { message?: string } }).error?.message || ''
-      if (res.status === 429 || msg.toLowerCase().includes('quota') || msg.toLowerCase().includes('resource_exhausted')) throw new Error('QUOTA_EXCEEDED')
-      throw new Error(msg || `Gemini APIエラー: ${res.status}`)
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: { responseMimeType: 'application/json', maxOutputTokens: maxTokens, thinkingConfig: { thinkingBudget: 0 } },
+          }),
+        }
+      )
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}))
+        const msg = (d as { error?: { message?: string } }).error?.message || ''
+        if (res.status === 429 || msg.toLowerCase().includes('quota') || msg.toLowerCase().includes('resource_exhausted')) throw new Error('QUOTA_EXCEEDED')
+        if (res.status === 503 || msg.toLowerCase().includes('overloaded') || msg.toLowerCase().includes('high demand')) {
+          lastError = new Error(msg || 'モデルが混雑しています。しばらく待ってから再試行してください。')
+          continue
+        }
+        throw new Error(msg || `Gemini APIエラー: ${res.status}`)
+      }
+      const d = await res.json()
+      const totalTokens: number = (d.usageMetadata?.totalTokenCount as number) ?? 0
+      if (totalTokens > 0) addUsage(totalTokens)
+      return d.candidates?.[0]?.content?.parts?.[0]?.text || ''
     }
-    const d = await res.json()
-    const totalTokens: number = (d.usageMetadata?.totalTokenCount as number) ?? 0
-    if (totalTokens > 0) addUsage(totalTokens)
-    return d.candidates?.[0]?.content?.parts?.[0]?.text || ''
+    throw lastError
   }
 
   const suggestThemes = async () => {
@@ -239,6 +252,7 @@ export default function Home() {
   const gaugeColor = tokenPct >= 90 ? 'from-red-500 to-red-400' : tokenPct >= 70 ? 'from-amber-500 to-yellow-400' : 'from-neon-purple to-neon-cyan'
   const gaugeTextColor = tokenPct >= 90 ? 'text-red-400' : tokenPct >= 70 ? 'text-amber-400' : 'text-neon-cyan'
   const isQuotaError = error === 'QUOTA_EXCEEDED'
+  const isOverloadedError = error.includes('混雑') || error.includes('overloaded') || error.includes('high demand')
 
   const HowToAccordion = () => (
     <div className="border border-neon-purple/20 rounded-xl overflow-hidden">
@@ -542,6 +556,12 @@ export default function Home() {
                     <p className="text-[13px] text-amber-400 font-bold">本日の無料枠を使い切りました</p>
                     <p className="text-[12px] text-text-secondary">翌日0時（日本時間）に自動でリセットされます。</p>
                     <p className="text-[12px] text-text-muted">課金は一切発生しません。明日また使えます。</p>
+                  </div>
+                ) : isOverloadedError ? (
+                  <div className="bg-amber-500/10 border border-amber-500/25 rounded-xl p-4 space-y-1">
+                    <p className="text-[13px] text-amber-400 font-bold">Geminiが一時的に混雑しています</p>
+                    <p className="text-[12px] text-text-secondary">自動でリトライしましたが接続できませんでした。</p>
+                    <p className="text-[12px] text-text-muted">少し時間をおいて再度「生成する」を押してください。</p>
                   </div>
                 ) : (
                   <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3">
